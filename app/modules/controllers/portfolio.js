@@ -53,11 +53,11 @@ function(app, Post, Category) {
     height: window.innerHeight,
     startRadius: Math.min(window.innerWidth, window.innerHeight) / 6,
     arcWeight: 1,
-    arcSpacing: 20,
+    arcSpacing: 15,
     postRadius: 100,
+    startTheta: Math.PI * 2/3,
+    endTheta: Math.PI * 2,
     color: ["#888", "#7AA9DD"],
-    pie: d3.layout.pie()
-      .sort(null),
 
     d3_init: function() {
       var cmp = this;
@@ -68,9 +68,9 @@ function(app, Post, Category) {
           .attr("transform", "translate(" + cmp.width / 2 + "," + cmp.height / 2 + ")");
 
       this.catArc = d3.svg.arc()
-          .startAngle(Math.PI/2)
+          .startAngle(cmp.startTheta)
           .endAngle(function (d) {
-            return Math.PI * 2 * d.value;
+            return cmp.endTheta * d.value;
           })
           .innerRadius(function(d) {
             return cmp.startRadius + d.index * cmp.arcSpacing;
@@ -79,10 +79,15 @@ function(app, Post, Category) {
             return cmp.startRadius + d.index * cmp.arcSpacing + cmp.arcWeight;
           });
 
+      this.postPie = d3.layout.pie()
+          .startAngle(cmp.startTheta)
+          .endAngle(cmp.endTheta)
+          .sort(null),
+
       this.postArc = d3.svg.arc()
-          .startAngle(Math.PI/2)
+          .startAngle(cmp.startTheta)
           .endAngle(function (d) {
-            return Math.PI * 2 * d.value;
+            return cmp.endTheta * d.value;
           })
           .innerRadius(function(d) {
             return cmp.startRadius + Portfolio.Categories.length * (cmp.arcSpacing + cmp.arcWeight);
@@ -138,6 +143,7 @@ console.log(event);
               .ease("back-in-out")
               .attrTween("d", tweenCatArc({value: 1}) );
 
+        console.log(cmp.postPie(cmp.posts));
         this.postArcs = cmp.svg.selectAll(".postArc")
             .data(cmp.posts)
           .enter().append("path")
