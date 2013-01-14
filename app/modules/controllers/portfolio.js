@@ -39,11 +39,15 @@ function(app, Post, Category) {
     },
 
     afterRender: function() {
+      var cmp = this;
       if (this.firstRender) {
         this.firstRender = false;
         this.d3_init();
         Portfolio.Categories.bind("all", this.d3_update);
-        Portfolio.Posts.bind("all", this.d3_update);
+        Portfolio.Posts.bind("all", function(event, post) {
+          cmp.createPattern(post);
+          cmp.d3_update(event, post);
+        });
       }
     },
 
@@ -82,12 +86,17 @@ function(app, Post, Category) {
       this.postPie = d3.layout.pie()
           .startAngle(cmp.startTheta)
           .endAngle(cmp.endTheta)
+          .value(function(d) {
+            return d.value;
+          })
           .sort(null),
 
       this.postArc = d3.svg.arc()
-          .startAngle(cmp.startTheta)
+          .startAngle(function(d) {
+            return d.startAngle;
+          })
           .endAngle(function (d) {
-            return cmp.endTheta * d.value;
+            return d.endAngle * d.value;
           })
           .innerRadius(function(d) {
             return cmp.startRadius + Portfolio.Categories.length * (cmp.arcSpacing + cmp.arcWeight);
@@ -95,13 +104,31 @@ function(app, Post, Category) {
           .outerRadius(function(d) {
             return cmp.startRadius + Portfolio.Categories.length * (cmp.arcSpacing + cmp.arcWeight) + cmp.postRadius;
           });
+
+      this.defs = this.svg.append("svg:defs");
+
+      this.clipGroups = this.svg.append("g");
+
+    },
+
+    createPattern: function(post) {
+      var cmp = this;
+      //console.log(post);
+      this.defs
+      	.append('svg:pattern')
+      	.attr('id', 'tile-' + post.id)
+      	.attr('width', 200)
+      	.attr('height', 200)
+      	.append('svg:image')
+      	.attr('xlink:href', post.get('thumbnail').src)
+      	.attr('x', 0)
+      	.attr('y', 0)
+      	.attr('width', 150)
+      	.attr('height', 150)
+        ;
     },
 
     d3_update: function(event, obj) {
-      /*
-console.log(event);
-      console.log(obj);
-*/
       if (event == "add") {
         if (obj.get('type') == 'category') {
           this.categories.push({value: 0.25, model: obj, index: Portfolio.Categories.indexOf(obj)});
@@ -113,7 +140,11 @@ console.log(event);
       if (this.svg) {
         this.catArcs = cmp.svg.selectAll(".categoryArc")
             .data(cmp.categories)
-          .enter().append("path")
+
+        this.postArcs = cmp.svg.selectAll(".postArc")
+            .data(cmp.postPie(cmp.posts))
+
+        this.catArcs.enter().append("path")
             .attr("class", "categoryArc")
             .attr("fill", function(d, i) {
               if (i % 2 == 0) {
@@ -123,50 +154,67 @@ console.log(event);
               }
             })
             .attr("d", cmp.catArc)
-            /*
-.on("mouseover", function(d) {
-                d3.select(this).transition()
-                   .duration(1000)
-                   .attrTween("d", tweenArc({value: .75}) );
-            })
-            .on("mouseout", function(d) {
-                d3.select(this).transition()
-                   .duration(1000)
-                   .attrTween("d", tweenArc({value: 1}) );
-            })
-*/
             .transition()
               .duration(1500)
               .delay(function(d) {
                 return d.index * 100;
               })
               .ease("back-in-out")
-              .attrTween("d", tweenCatArc({value: 1}) );
+              .attrTween("d", cmp.tweenCatArc({value: 1}) );
 
-        console.log(cmp.postPie(cmp.posts));
-        this.postArcs = cmp.svg.selectAll(".postArc")
-            .data(cmp.posts)
-          .enter().append("path")
+        this.postArcs.enter()
+          /*
+.append("g")
             .attr("class", "postArc")
-            .attr("fill", function(d, i) {
-              if (i % 2 == 0) {
-                return cmp.color[0];
-              } else {
-                return cmp.color[1];
-              }
+            .attr("class", "clip_group")
+            .attr("clip-rule", "nonzero")
+            .attr("id", function(d) {
+              return d.data.model.id + "_to_clip";
+            })
+            .attr("clip-path", function(d) {
+              return "url(#clip-" + d.data.model.id + ")";
+            })
+          .append("image")
+            .attr("width", 150)
+            .attr("height", 150)
+            //.attr("transform", "scale(" + s + ")")
+            .attr("xlink:href", function(d) {
+              return d.data.model.get('thumbnail').src;
+            })
+*/
+          .append("path")
+            .attr("class", "postArc")
+            .attr("fill", function(d) {
+              return "url(#tile-" + d.data.model.id + ")";
             })
             .attr("d", cmp.postArc);
+            ;
+
+        this.postArcs
+            .attr("d", cmp.postArc)
+            ;
+
       }
+    },
 
-      //comment line for git
+    createClipPaths: function() {
+      var cmp = this;
+      _(cmp.postPie(cmp.posts)).each(function(d) {
+        cmp.clipGroups
+          .append("clipPath")
+            .attr('id', 'clip-' + d.data.model.id)
+          .append('path')
+            .attr('d', cmp.postArc(d));
+      });
+    },
 
-      function tweenCatArc(b) {
-        return function (a) {
-          var i = d3.interpolate(a, b);
-          for (var key in b) a[key] = b[key]; // update data
-          return function(t) {
-            return cmp.catArc(i(t));
-          };
+    tweenCatArc: function(b) {
+      var cmp = this;
+      return function (a) {
+        var i = d3.interpolate(a, b);
+        for (var key in b) a[key] = b[key]; // update data
+        return function(t) {
+          return cmp.catArc(i(t));
         };
       };
     }
@@ -223,6 +271,8 @@ console.log(event);
         _(data.posts).each(function(post) {
           Portfolio.Posts.add({wp_object: post});
         });
+        app.layouts.portfolio.createClipPaths();
+        app.layouts.portfolio.d3_update();
         callback();
       });
     } else {
