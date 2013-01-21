@@ -111,23 +111,6 @@ function(app, Post, Category) {
 
     },
 
-    createPattern: function(post) {
-      var cmp = this;
-      //console.log(post);
-      this.defs
-      	.append('svg:pattern')
-      	.attr('id', 'tile-' + post.id)
-      	.attr('width', 200)
-      	.attr('height', 200)
-      	.append('svg:image')
-      	.attr('xlink:href', post.get('thumbnail').src)
-      	.attr('x', 0)
-      	.attr('y', 0)
-      	.attr('width', 150)
-      	.attr('height', 150)
-        ;
-    },
-
     d3_update: function(event, obj) {
       if (event == "add") {
         if (obj.get('type') == 'category') {
@@ -140,9 +123,6 @@ function(app, Post, Category) {
       if (this.svg) {
         this.catArcs = cmp.svg.selectAll(".categoryArc")
             .data(cmp.categories)
-
-        this.postArcs = cmp.svg.selectAll(".postArc")
-            .data(cmp.postPie(cmp.posts))
 
         this.catArcs.enter().append("path")
             .attr("class", "categoryArc")
@@ -160,41 +140,29 @@ function(app, Post, Category) {
                 return d.index * 100;
               })
               .ease("back-in-out")
-              .attrTween("d", cmp.tweenCatArc({value: 1}) );
-
-        this.postArcs.enter()
-          /*
-.append("g")
-            .attr("class", "postArc")
-            .attr("class", "clip_group")
-            .attr("clip-rule", "nonzero")
-            .attr("id", function(d) {
-              return d.data.model.id + "_to_clip";
-            })
-            .attr("clip-path", function(d) {
-              return "url(#clip-" + d.data.model.id + ")";
-            })
-          .append("image")
-            .attr("width", 150)
-            .attr("height", 150)
-            //.attr("transform", "scale(" + s + ")")
-            .attr("xlink:href", function(d) {
-              return d.data.model.get('thumbnail').src;
-            })
-*/
-          .append("path")
-            .attr("class", "postArc")
-            .attr("fill", function(d) {
-              return "url(#tile-" + d.data.model.id + ")";
-            })
-            .attr("d", cmp.postArc);
-            ;
-
-        this.postArcs
-            .attr("d", cmp.postArc)
-            ;
+              .attrTween("d", cmp.tweenCatArc({value: 1}) )
+              ;
 
       }
+    },
+
+    createPattern: function(post) {
+      var cmp = this;
+      //console.log(post);
+      this.defs
+      	.append('svg:pattern')
+      	.attr('id', 'tile-' + post.id)
+      	.attr('width', 150)
+      	.attr('height', 150)
+      	.attr('patternUnits', 'userSpaceOnUse')
+      	.attr('patternTransform', 'translate(-50, -50)')
+      	.append('svg:image')
+      	.attr('xlink:href', post.get('thumbnail').src)
+      	.attr('x', 0)
+      	.attr('y', 0)
+      	.attr('width', 150)
+      	.attr('height', 150)
+        ;
     },
 
     createClipPaths: function() {
@@ -208,6 +176,57 @@ function(app, Post, Category) {
       });
     },
 
+    createPostArcs: function() {
+      var cmp = this;
+
+      this.createClipPaths();
+
+      this.postArcs = cmp.svg.selectAll(".postArc")
+          .data(cmp.postPie(cmp.posts))
+
+      this.postArcs.enter()
+        /*
+.append("g")
+          .attr("class", "postArc")
+          .attr("class", "clip_group")
+          .attr("clip-rule", "nonzero")
+          .attr("id", function(d) {
+            return d.data.model.id + "_to_clip";
+          })
+          .attr("clip-path", function(d) {
+            return "url(#clip-" + d.data.model.id + ")";
+          })
+        .append("image")
+          .attr("width", 150)
+          .attr("height", 150)
+          //.attr("transform", "scale(" + s + ")")
+          .attr("xlink:href", function(d) {
+            return d.data.model.get('thumbnail').src;
+          })
+*/
+        .append("path")
+          .attr("class", "postArc")
+          .attr("fill", function(d) {
+            return "url(#tile-" + d.data.model.id + ")";
+          })
+          .on("mouseover", function(d) {
+              d3.select(this).transition()
+                 .duration(1000)
+                 .attrTween("d", cmp.tweenPostArc({value: .75}) );
+          })
+          .on("mouseout", function(d) {
+              d3.select(this).transition()
+                 .duration(1000)
+                 .attrTween("d", cmp.tweenPostArc({value: 1}) );
+          })
+          //.attr("d", cmp.postArc)
+          ;
+
+      this.postArcs
+          .attr("d", cmp.postArc)
+          ;
+    },
+
     tweenCatArc: function(b) {
       var cmp = this;
       return function (a) {
@@ -217,8 +236,18 @@ function(app, Post, Category) {
           return cmp.catArc(i(t));
         };
       };
-    }
+    },
 
+    tweenPostArc: function(b) {
+      var cmp = this;
+      return function (a) {
+        var i = d3.interpolate(a, b);
+        for (var key in b) a[key] = b[key]; // update data
+        return function(t) {
+          return cmp.postArc(i(t));
+        };
+      };
+    }
   });
 
   app.layouts.portfolio = new Portfolio.Views.Layout({});
@@ -271,8 +300,7 @@ function(app, Post, Category) {
         _(data.posts).each(function(post) {
           Portfolio.Posts.add({wp_object: post});
         });
-        app.layouts.portfolio.createClipPaths();
-        app.layouts.portfolio.d3_update();
+        app.layouts.portfolio.createPostArcs();
         callback();
       });
     } else {
